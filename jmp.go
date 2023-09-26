@@ -9,6 +9,14 @@ import (
 	"github.com/lithammer/fuzzysearch/fuzzy"
 )
 
+const FAVOURITE_MULTIPLIER int = 10
+
+type config struct {
+	ProjectsRoot string   `json:"projectsRoot"`
+	SearchDepth  int      `json:"searchDepth"`
+	Favourites   []string `json:"favourites"`
+}
+
 func isGitRepo(path string) (bool, error) {
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
@@ -55,8 +63,17 @@ func findGitRepos(start string, maxDepth int) ([]string, error) {
 	return dirs, nil
 }
 
-func fuzzyFindGitRepo(startDir, name string) (string, error) {
-	gitRepos, err := findGitRepos(startDir, 5)
+func isFavourite(repo string, faves []string) bool {
+	for _, fave := range faves {
+		if repo == fave {
+			return true
+		}
+	}
+	return false
+}
+
+func fuzzyFindGitRepo(cfg config, target string) (string, error) {
+	gitRepos, err := findGitRepos(os.ExpandEnv(cfg.ProjectsRoot), cfg.SearchDepth)
 	if err != nil {
 		return "", nil
 	}
@@ -66,7 +83,10 @@ func fuzzyFindGitRepo(startDir, name string) (string, error) {
 
 	for _, repoPath := range gitRepos {
 		_, directoryName := path.Split(repoPath)
-		score := fuzzy.RankMatch(name, directoryName)
+		score := fuzzy.RankMatch(target, directoryName)
+		if isFavourite(directoryName, cfg.Favourites) && score >= 1 {
+			score *= FAVOURITE_MULTIPLIER
+		}
 		if score > bestScore {
 			bestPath = repoPath
 			bestScore = score
