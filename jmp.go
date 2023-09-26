@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -96,15 +97,40 @@ func fuzzyFindGitRepo(cfg config, target string) (string, error) {
 	return bestPath, nil
 }
 
+func usage() string {
+	return `jmp <repository>
+Jump to a git repository.`
+}
+
 func main() {
-	start := "/Users/arcadia.rose/Code"
+	if len(os.Args) < 2 || os.Args[1] == "help" {
+		fmt.Fprintf(os.Stderr, "%s\n", usage())
+		os.Exit(1)
+	}
 	targetRepo := os.Args[1]
 
-	path, err := fuzzyFindGitRepo(start, targetRepo)
-	found := err == nil && path != ""
-	if found {
-		fmt.Printf("Found %s\n", path)
-	} else {
-		fmt.Printf("Couldn't find it. Error = %s\n", err.Error())
+	cfg := config{}
+	configPath := path.Join(os.ExpandEnv("$HOME"), ".jmp", "cfg.json")
+	cfgFile, err := os.Open(configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Could not open config file %s, reason: %s.\n", configPath, err.Error())
+		os.Exit(1)
 	}
+	decoder := json.NewDecoder(cfgFile)
+	err = decoder.Decode(&cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Could not load configuration in %s, reason: %s.\n", configPath, err.Error())
+		os.Exit(1)
+	}
+
+	path, err := fuzzyFindGitRepo(cfg, targetRepo)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Couldn't find a repository matching %s. Error = %s\n", targetRepo, err.Error())
+		os.Exit(1)
+	} else if path == "" {
+		fmt.Fprintf(os.Stderr, "Couldn't find a repository matching %s.\n", targetRepo)
+		os.Exit(1)
+	}
+
+	fmt.Println(path)
 }
